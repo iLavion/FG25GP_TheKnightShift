@@ -7,13 +7,11 @@ namespace Game
     public class Card_Firewall : Cards.Card
     {
         private static Color32  sm_fireColor = new Color32(255, 92, 10, 64);
-        private static readonly List<Cave.Node> sm_burningNodes = new List<Cave.Node>();
 
         #region Properties
         public override string Name => "Firewall";
         public override int ManaCost => 12;
         public override string IconName => "Fire";
-        public static IReadOnlyList<Cave.Node> BurningNodes => sm_burningNodes;
         #endregion
 
         protected Queue<Cave.Node> CalculateNodes(Vector2Int vMouseCoord)
@@ -92,14 +90,14 @@ namespace Game
         private IEnumerator GrowFirewall(Queue<Cave.Node> nodes)
         {
             const float FIRE_SIZE = 1.0f;
-            const float FIRE_DURATION = 4.0f;
+            const float FIRE_DURATION = 6.0f;
             const float STEP_DELAY = 0.15f;
 
             while (nodes.Count > 0)
             {
                 Cave.Node node = nodes.Dequeue();
                 Effects.CreateFire((Vector3)node.Center, FIRE_SIZE, FIRE_DURATION);
-                if (!sm_burningNodes.Contains(node)) sm_burningNodes.Add(node);
+                BurningManager.Instance?.AddOrRefreshNode(node, FIRE_DURATION);
                 if (nodes.Count > 0) yield return new WaitForSeconds(STEP_DELAY);
             }
         }
@@ -107,13 +105,13 @@ namespace Game
         private void IgniteNodesImmediate(Queue<Cave.Node> nodes)
         {
             const float FIRE_SIZE = 1.0f;
-            const float FIRE_DURATION = 4.0f;
+            const float FIRE_DURATION = 6.0f;
 
             while (nodes.Count > 0)
             {
                 Cave.Node node = nodes.Dequeue();
                 Effects.CreateFire((Vector3)node.Center, FIRE_SIZE, FIRE_DURATION);
-                if (!sm_burningNodes.Contains(node)) sm_burningNodes.Add(node);
+                BurningManager.Instance?.AddOrRefreshNode(node, FIRE_DURATION);
             }
         }
     }

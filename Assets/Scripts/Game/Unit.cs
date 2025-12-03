@@ -5,48 +5,41 @@ using UnityEngine;
 
 namespace Game
 {
+    // ? Why this data structure ?
+    // * basically DOT effects are stored in a List cause we need to keep dupes & be able
+    // * to iterate sequentially every frame + remove finished effects with a single pass.
+    // * so its pretty predictable for the iteration order and it has low overhead.
+    // * then you might ask... why a List? It happily holds duplicate DOTs & lets us walk 
+    // * them in order each frame + makes "remove everything that's done" pass painlessly 
+
     [RequireComponent(typeof(MeshFilter))]
     [RequireComponent(typeof(MeshRenderer))]
     public abstract class Unit : MonoBehaviour
     {
-        private int             m_iHealth;
-        protected Vector2Int    m_vCoord;
-        private Cave.Node       m_node;
-        private Material        m_health;
-
-        static Material         sm_unitMaterial;
-        static Material         sm_health;
-        static Mesh[]           sm_unitMeshes = null;
-
+        private int m_iHealth;
+        protected Vector2Int m_vCoord;
+        private Cave.Node m_node;
+        private Material m_health;
+        private readonly List<DamageOverTime> m_damageOverTimeEffects = new List<DamageOverTime>();
+        static Material sm_unitMaterial;
+        static Material sm_health;
+        static Mesh[] sm_unitMeshes = null;
         public static List<Unit> AllUnits = new List<Unit>();
 
         #region Properties
-
         public Cave.Node Node
         {
             get => m_node;
             set
             {
-                if (m_node != null)
-                {
-                    m_node.Unit = null;
-                }
-
+                if (m_node != null) m_node.Unit = null;
                 m_node = value;
-
-                if (m_node != null)
-                {
-                    m_node.Unit = this;
-                }
+                if (m_node != null) m_node.Unit = this;
             }
         }
-
         protected abstract int MeshIndex { get; }
-
         protected abstract int AttackDamage { get; }
-
         protected abstract int MaxHealth { get; }
-
         #endregion
 
         protected virtual void OnEnable()
@@ -62,29 +55,23 @@ namespace Game
         protected virtual void Start()
         {
             // coord from position
-            m_vCoord = new Vector2Int(Mathf.RoundToInt(transform.position.x),
-                                      Mathf.RoundToInt(transform.position.y));
+            m_vCoord = new Vector2Int(
+                Mathf.RoundToInt(transform.position.x),
+                Mathf.RoundToInt(transform.position.y)
+            );
 
             // initialize health
             m_iHealth = MaxHealth;
 
             // load unit material?
-            if (sm_unitMaterial == null)
-            {
-                sm_unitMaterial = Resources.Load<Material>("Materials/Units");
-            }
+            sm_unitMaterial ??= Resources.Load<Material>("Materials/Units");
 
             // load unit health material?
-            if (sm_health == null)
-            {
-                sm_health = Resources.Load<Material>("Materials/Health");
-            }
+            sm_health ??= Resources.Load<Material>("Materials/Health");
 
             // create unit meshes?
-            if (sm_unitMeshes == null)
-            {
-                Vector3[] corners = new Vector3[]
-                {
+            if (sm_unitMeshes == null) {
+                Vector3[] corners = new Vector3[] {
                     new Vector3(0.0f, 0.0f, 0.0f),
                     new Vector3(0.0f, 1.0f, 0.0f),
                     new Vector3(1.0f, 1.0f, 0.0f),
@@ -92,10 +79,8 @@ namespace Game
                 };
 
                 sm_unitMeshes = new Mesh[4];
-                for (int y = 0; y < 2; ++y)
-                {
-                    for (int x = 0; x < 2; ++x)
-                    {
+                for (int y = 0; y < 2; ++y) {
+                    for (int x = 0; x < 2; ++x) {
                         Mesh mesh = new Mesh();
                         mesh.name = "UnitMesh " + x + ", " + y;
                         mesh.hideFlags = HideFlags.DontSave;
@@ -133,15 +118,27 @@ namespace Game
             m_health.SetFloat("_Amount", Mathf.Clamp01(m_iHealth / (float)MaxHealth));
 
             // HP message
-            GameCanvas.Instance.CreateMessage((iAmount < 0 ? "+" : "-") + Mathf.Abs(iAmount) + " HP", 
-                                              transform.position + Vector3.up * 0.9f, 
-                                              iAmount < 0 ? Color.green : Color.red);
+            GameCanvas.Instance.CreateMessage(
+                (iAmount < 0 ? "+" : "-") + Mathf.Abs(iAmount) + " HP", 
+                transform.position + Vector3.up * 0.9f, 
+                iAmount < 0 ? Color.green : Color.red
+            );
 
             // death?
-            if (m_iHealth <= 0.0f)
-            {
-                Destroy(gameObject);
-            }
+            if (m_iHealth <= 0.0f) Destroy(gameObject);
+        }
+
+        public void AddDamageOverTime(DamageOverTime effect)
+        {
+            if (effect == null) return;
+            m_damageOverTimeEffects.Add(effect);
+        }
+
+        protected virtual void Update()
+        {
+            if (m_damageOverTimeEffects.Count == 0) return;
+            for (int i = 0; i < m_damageOverTimeEffects.Count; ++i) m_damageOverTimeEffects[i].Update(this);
+            m_damageOverTimeEffects.RemoveAll(effect => effect.IsDone);
         }
 
         protected IEnumerator AttackUnit(Unit enemy)
@@ -158,20 +155,17 @@ namespace Game
             });
 
             // 'attack' animation :)
-            for (float f = 0.0f; f < fDuration; f += Time.deltaTime)
-            {
+            for (float f = 0.0f; f < fDuration; f += Time.deltaTime) {
                 transform.localEulerAngles = new Vector3(0.0f, 0.0f, rotationCurve.Evaluate(f));
                 yield return null;
             }
             transform.localEulerAngles = Vector3.zero;
 
             // deal damage
-            try
-            {
+            try {
                 enemy.TakeDamage(AttackDamage);
             }
-            catch (System.Exception)
-            {
+            catch (System.Exception) {
                 // enemy might have died
             }
         }
@@ -182,17 +176,14 @@ namespace Game
             T bestUnit = null;
             foreach (Unit unit in AllUnits)
             {
-                if (unit is T)
-                {
+                if (unit is T) {
                     float fDistance = Vector2.Distance(vPosition, unit.transform.position);
-                    if (fDistance < fBestDistance)
-                    {
+                    if (fDistance < fBestDistance) {
                         fBestDistance = fDistance;
                         bestUnit = unit as T;
                     }
                 }
             }
-
             return bestUnit;
         }
 
