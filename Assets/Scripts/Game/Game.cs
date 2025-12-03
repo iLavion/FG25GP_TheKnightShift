@@ -11,30 +11,26 @@ namespace Game
         private Transform m_unitsParent;
 
         #region Properties
-
         public Transform UnitsParent
         {
-            get
-            {
-                if (m_unitsParent == null)
-                {
+            get {
+                if (m_unitsParent == null) {
                     m_unitsParent = transform.Find("Units");
-                    if(m_unitsParent == null)
-                    {
+                    if(m_unitsParent == null) {
                         GameObject go = new GameObject("Units");
                         go.transform.parent = transform;
                         m_unitsParent = go.transform;
                     }
                 }
-
                 return m_unitsParent;
             }
         }
-
         #endregion
 
         private void Start()
         {
+            if (BurningManager.Instance == null) gameObject.AddComponent<BurningManager>();
+
             // initialize cards
             Cards cards = GetComponentInChildren<Cards>();
             cards.InitializeCards();
